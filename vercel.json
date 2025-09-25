@@ -1,8 +1,5 @@
 {
   "version": 2,
-  "buildCommand": null,
-  "outputDirectory": ".",
-  "functions": {},
   "rewrites": [
     {
       "source": "/(.*)",
