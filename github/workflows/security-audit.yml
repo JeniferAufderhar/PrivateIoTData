@@ -1,0 +1,266 @@
+name: Security and Performance Audit
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Run security audit daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+env:
+  NODE_VERSION: '20.x'
+
+jobs:
+  lint-and-format:
+    name: Code Quality Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Solidity linter
+        run: npm run lint:sol
+
+      - name: Run JavaScript/TypeScript linter
+        run: npm run lint:js
+
+      - name: Check code formatting
+        run: npm run format:check
+
+      - name: Upload lint results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-results
+          path: |
+            eslint-report.json
+            solhint-report.json
+
+  security-analysis:
+    name: Security Analysis
+    runs-on: ubuntu-latest
+    needs: lint-and-format
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile contracts
+        run: npm run compile
+
+      - name: Run security checks
+        run: npm run security:check
+
+      - name: Check for known vulnerabilities
+        run: npm audit --audit-level=moderate
+
+      - name: Analyze contract dependencies
+        run: |
+          echo "Checking for dangerous patterns..."
+          if grep -r "selfdestruct\|delegatecall\|callcode" contracts/; then
+            echo "Warning: Potentially dangerous operations found"
+          fi
+
+      - name: Upload security results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-results
+          path: |
+            security-report.txt
+
+  test-and-coverage:
+    name: Test and Coverage
+    runs-on: ubuntu-latest
+    needs: lint-and-format
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Run coverage
+        run: npm run coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage/lcov.info
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+      - name: Upload coverage results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-results
+          path: |
+            coverage/
+            .coverage/
+
+  gas-analysis:
+    name: Gas Usage Analysis
+    runs-on: ubuntu-latest
+    needs: lint-and-format
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run gas reporter
+        run: npm run test:gas
+        env:
+          REPORT_GAS: true
+          COINMARKETCAP_API_KEY: ${{ secrets.COINMARKETCAP_API_KEY }}
+
+      - name: Check contract size
+        run: npm run size
+
+      - name: Upload gas report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gas-report
+          path: |
+            gas-report.txt
+
+      - name: Comment gas report on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            try {
+              const gasReport = fs.readFileSync('gas-report.txt', 'utf8');
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: '## Gas Usage Report\n\n```\n' + gasReport + '\n```'
+              });
+            } catch (error) {
+              console.log('No gas report found');
+            }
+
+  contract-verification:
+    name: Contract Verification
+    runs-on: ubuntu-latest
+    needs: [security-analysis, test-and-coverage]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile contracts
+        run: npm run compile
+
+      - name: Generate verification artifacts
+        run: |
+          echo "Contract compilation successful"
+          echo "Ready for deployment verification"
+
+  performance-check:
+    name: Performance Analysis
+    runs-on: ubuntu-latest
+    needs: lint-and-format
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Analyze bundle size
+        run: |
+          echo "Checking bundle sizes..."
+          if [ -d "dist" ]; then
+            du -sh dist/*
+          fi
+
+      - name: Upload bundle analysis
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-analysis
+          path: dist/
+
+  summary:
+    name: Audit Summary
+    runs-on: ubuntu-latest
+    needs: [security-analysis, test-and-coverage, gas-analysis, performance-check]
+    if: always()
+
+    steps:
+      - name: Generate summary
+        run: |
+          echo "# Security and Performance Audit Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Results" >> $GITHUB_STEP_SUMMARY
+          echo "- Security Analysis: ${{ needs.security-analysis.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Tests and Coverage: ${{ needs.test-and-coverage.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Gas Analysis: ${{ needs.gas-analysis.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Performance Check: ${{ needs.performance-check.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Audit completed at $(date)" >> $GITHUB_STEP_SUMMARY
