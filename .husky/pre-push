@@ -1,0 +1,20 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Pre-push hook for final validation
+
+echo "Running pre-push validation..."
+
+# Run full test suite
+echo "Running tests..."
+npm run test
+
+# Run coverage check
+echo "Checking test coverage..."
+npm run coverage
+
+# Check contract size
+echo "Checking contract sizes..."
+npm run size
+
+echo "Pre-push validation passed!"

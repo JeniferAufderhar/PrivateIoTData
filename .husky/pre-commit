@@ -1,0 +1,32 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Pre-commit hook for security and quality checks
+
+echo "Running pre-commit checks..."
+
+# Run linters on staged files
+npx lint-staged
+
+# Check for common security issues in Solidity files
+echo "Checking for security patterns..."
+
+# Check for unsafe external calls
+if git diff --cached --name-only | grep -q "\.sol$"; then
+    if git diff --cached | grep -E "(\.call\{value:|\.delegatecall|\.callcode)" > /dev/null; then
+        echo "Warning: Low-level calls detected. Please review for reentrancy vulnerabilities."
+    fi
+
+    # Check for tx.origin usage
+    if git diff --cached | grep -q "tx\.origin"; then
+        echo "Error: tx.origin usage detected. Use msg.sender instead."
+        exit 1
+    fi
+
+    # Check for block.timestamp in critical logic
+    if git diff --cached | grep -E "(block\.timestamp.*require|require.*block\.timestamp)" > /dev/null; then
+        echo "Warning: block.timestamp used in require statement. Ensure this is not security-critical."
+    fi
+fi
+
+echo "Pre-commit checks passed!"

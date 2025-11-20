@@ -1,1 +1,21 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
 
+# Commit message validation hook
+
+commit_msg_file=$1
+commit_msg=$(cat "$commit_msg_file")
+
+# Check commit message format
+# Format: type(scope): subject
+# Example: feat(contracts): add DoS protection to data submission
+
+if ! echo "$commit_msg" | grep -qE "^(feat|fix|docs|style|refactor|perf|test|chore|security)(\(.+\))?: .{1,}$"; then
+    echo "Error: Invalid commit message format!"
+    echo "Format: type(scope): subject"
+    echo "Types: feat, fix, docs, style, refactor, perf, test, chore, security"
+    echo "Example: feat(contracts): add DoS protection to data submission"
+    exit 1
+fi
+
+echo "Commit message format validated!"
