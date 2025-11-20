@@ -2,7 +2,7 @@
 
 **Privacy-Preserving IoT Data Management with Fully Homomorphic Encryption**
 
-🌐 **[Live Demo](https://private-io-t-data.vercel.app/)** | 🎥 **[Video Demo](PrivateIoTData.mp4)** | 📄 **[Documentation](TUTORIAL.md)**
+🌐 **[Live Demo](https://private-io-t-data.vercel.app/)** | 🎥 **[Video Demo PrivateIoTData.mp4]()** | 📄 **[Documentation](TUTORIAL.md)**
 
 A decentralized platform for secure IoT device data management using Zama's FHEVM technology, enabling encrypted computation on sensitive sensor data while maintaining complete privacy.
 
