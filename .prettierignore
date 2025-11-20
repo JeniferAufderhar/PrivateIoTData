@@ -1,0 +1,9 @@
+node_modules
+artifacts
+cache
+coverage
+types
+dist
+package-lock.json
+*.min.js
+*.bundle.js
